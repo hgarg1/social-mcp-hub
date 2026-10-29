@@ -1,5 +1,6 @@
 """Local stdio MCP transport. No public HTTP listener or import-time API calls."""
 import argparse
+import asyncio
 import os
 from typing import Annotated, Any
 
@@ -150,6 +151,11 @@ def main() -> None:
         config = HttpSettings.from_env()
     except ValueError as exc:
         parser.error(str(exc))
+    if os.environ.get("X_VERIFY_ACCOUNT_ON_START", "").lower() == "true":
+        # One read per process start, never on each health probe (which would
+        # keep the free database compute permanently awake).
+        account = asyncio.run(XClient(Settings.from_env()).account())
+        print("X OAuth login verified on startup for @" + account["data"]["username"], flush=True)
     build_server(http_settings=config).run(transport="streamable-http", host=args.host, port=args.port,
         streamable_http_path="/mcp", stateless_http=True, json_response=True,
         max_request_body_size=8 * 1024 * 1024, transport_security=config.transport_security())

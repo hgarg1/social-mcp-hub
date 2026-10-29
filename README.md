@@ -167,3 +167,6 @@ No live posting, deleting, or billable API read is performed by these tests. Acc
 - [OAuth 2.0 authorization code flow with PKCE](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)
 - [Official MCP Python SDK](https://py.sdk.modelcontextprotocol.io/)
 - [Tweepy legacy profile endpoint contracts](https://docs.tweepy.org/en/stable/api.html#tweepy.API.update_profile)
+
+
+Hosted OAuth 2 token rotation can now use encrypted Neon Postgres storage on the Free plan, surviving Render restarts without a paid disk. See [the durable token setup](DEPLOYMENT.md#free-durable-oauth-2-token-storage).

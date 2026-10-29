@@ -15,6 +15,8 @@ class Settings:
     redirect_uri: str = "http://127.0.0.1:8765/callback"
     token_file: Path = ROOT / ".tokens.json"
     expected_user_id: str = ""
+    database_url: str = field(default="", repr=False)
+    token_encryption_key: str = field(default="", repr=False)
     consumer_key: str = field(default="", repr=False)
     consumer_secret: str = field(default="", repr=False)
     oauth1_access_token: str = field(default="", repr=False)
@@ -37,6 +39,8 @@ class Settings:
             redirect_uri=os.environ.get("X_REDIRECT_URI", cls.redirect_uri),
             token_file=token_path,
             expected_user_id=os.environ.get("X_EXPECTED_USER_ID", "").strip(),
+            database_url=os.environ.get("X_TOKEN_DATABASE_URL", "").strip(),
+            token_encryption_key=os.environ.get("X_TOKEN_ENCRYPTION_KEY", "").strip(),
             consumer_key=os.environ.get("X_CONSUMER_KEY", "").strip(),
             consumer_secret=os.environ.get("X_CONSUMER_SECRET", "").strip(),
             oauth1_access_token=os.environ.get("X_OAUTH1_ACCESS_TOKEN", "").strip(),

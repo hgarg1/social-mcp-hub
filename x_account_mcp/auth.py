@@ -81,6 +81,9 @@ class TokenProvider:
         self._lock = asyncio.Lock()
 
     async def access_token(self) -> str:
+        if self.settings.database_url:
+            from .token_store import database_access_token
+            return await asyncio.to_thread(database_access_token, self.settings, self.transport)
         if self.settings.access_token:
             return self.settings.access_token
         async with self._lock:
@@ -149,7 +152,12 @@ def main() -> None:
                 "grant_type": "authorization_code", "code": code,
                 "redirect_uri": settings.redirect_uri, "code_verifier": verifier,
             }))
-        save_tokens(settings.token_file, parse_token_response(response))
+        authorized = parse_token_response(response)
+        if settings.database_url:
+            from .token_store import seed_tokens
+            seed_tokens(settings, authorized, replace_existing=True)
+        else:
+            save_tokens(settings.token_file, authorized)
         print("Login saved. Restart the MCP connection, then call get_account to verify identity.")
         if settings.access_token:
             print("Remove X_USER_ACCESS_TOKEN if you want to use the saved, refreshable login.")

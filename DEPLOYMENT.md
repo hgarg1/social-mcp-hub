@@ -13,7 +13,7 @@ Why Render:
 - It runs ordinary Python web services and gives each service a public `onrender.com` hostname with managed HTTPS.
 - The process binds to `0.0.0.0` and Render's `PORT` environment variable.
 - Start with the smallest Free web compute plan for a trial. Free services sleep after 15 minutes of inactivity and can take about a minute to wake. For routine chatbot use, the smallest paid web compute plan avoids that Free sleep behavior; confirm the current price in the Dashboard before selecting it.
-- Store X credentials as service environment variables. With OAuth 1.0a credentials, this application needs no database or writable token storage. OAuth 2 rotating token files require a persistent volume and one instance, so do not use an ephemeral local token file for a hosted production login.
+- Store X credentials as service environment variables. With OAuth 1.0a credentials, this application needs no database or writable token storage. OAuth 2 uses the encrypted Neon Postgres store described below, so no paid Render disk is needed.
 
 A normal Python service on Railway, Fly.io or a VPS is also structurally suitable, but Render is the deployment path documented here. Do not deploy the default stdio command as a web service.
 
@@ -105,3 +105,16 @@ This does not mean every chatbot UI supports arbitrary MCP servers or that each 
 - [Claude Code MCP](https://code.claude.com/docs/en/mcp)
 - [Official OpenAI MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 - [Grok custom connectors](https://docs.x.ai/grok/connectors)
+
+
+## Free durable OAuth 2 token storage
+
+Render Free plus Neon Free supports the OAuth 2 post, Article and image workflows without legacy OAuth 1.0a. The dedicated database has one encrypted token row. Configure `X_TOKEN_DATABASE_URL`, `X_TOKEN_ENCRYPTION_KEY`, `X_CLIENT_ID` and `X_CLIENT_SECRET` in Render. Database mode takes precedence over a static access token or local token file. Keep the encryption key unchanged across redeploys; losing it requires reauthorization.
+
+Apply `migrations/001_oauth_tokens.sql` once to a fresh database using an administrative connection. Seed the encrypted row from an authorized login using `seed_tokens`; the seed refuses to overwrite an existing row by default. Subsequent interactive logins save directly to the configured database. No token is committed to Git.
+
+Each lookup opens a short database transaction. An expired access token is refreshed while holding a Postgres row lock; the replacement refresh/access tokens are encrypted and committed before the access token is returned. Concurrent workers wait and reuse the saved replacement. No cron or always-running process is required: refresh occurs on the next request after expiry. Revocation, provider expiry of a refresh token, or a crash between an external refresh and database commit can still require signing in again.
+
+`X_VERIFY_ACCOUNT_ON_START=true` performs one authenticated X account read per HTTP process startup, allowing deployment logs to verify the hosted credentials. It does not query the database on every health probe.
+
+The Neon organization used for this deployment is on its Free plan. Free allowances and Render sleep limits still apply; this does not make the X API itself free. See [Neon pricing](https://neon.com/pricing) for current free limits. Legacy-only profile tools remain unavailable under OAuth 2.
