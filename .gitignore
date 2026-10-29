@@ -1,0 +1,14 @@
+.venv/
+.env
+.env.*
+!.env.example
+keys.txt
+*.pem
+*.key
+.tokens.json
+.tokens.json.*
+__pycache__/
+.pytest_cache/
+*.egg-info/
+build/
+dist/

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "x-account-mcp"
+version = "0.1.0"
+description = "Personal X MCP server for post CRUD and native Articles."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["mcp>=2.3,<3", "httpx>=0.28,<1", "python-dotenv>=1.2,<2", "oauthlib>=3.3,<4", "PyJWT[crypto]>=2.10,<3", "starlette>=0.40,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+x-account-mcp = "x_account_mcp.server:main"
+x-account-login = "x_account_mcp.auth:main"
+
+[tool.setuptools.packages.find]
+include = ["x_account_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

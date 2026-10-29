@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "x-account": {
+      "command": "C:\\path\\to\\x-account-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "x_account_mcp.server"]
+    }
+  }
+}
