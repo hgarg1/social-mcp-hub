@@ -6,7 +6,7 @@ Run one Python web service on **Render**, with **WorkOS AuthKit / Connect** as i
 
 The server is a personal integration: it accepts only the configured owner's identity. Publishing this source repository does not make your account public or turn it into a multi-user X SaaS.
 
-This is a prepared deployment path, not a deployment that has already been provisioned or tested against your live identity provider. No paid infrastructure is created by the repository.
+This repository is the source for a live deployment. The running service is on Render, AuthKit is the authorization server, and ChatGPT is connected to the public `/mcp` endpoint. Cloning the repository does not create that infrastructure or publish the X account.
 
 Why Render:
 
@@ -19,13 +19,13 @@ A normal Python service on Railway, Fly.io or a VPS is also structurally suitabl
 
 ## Public endpoint and OAuth
 
-The public MCP URL will be:
+The live service uses a Render hostname of this shape. The hostname itself stays in the Render and AuthKit dashboards:
 
 ```text
 https://YOUR-SERVICE.onrender.com/mcp
 ```
 
-This is a placeholder shape, not a live URL. `/health` is public and returns only `{"status":"ok"}`. `/mcp` requires a signed bearer token. OAuth resource metadata is available at `/.well-known/oauth-protected-resource/mcp`.
+`/health` is public and returns only `{"status":"ok"}`. `/mcp` requires a signed bearer token. OAuth resource metadata is available at `/.well-known/oauth-protected-resource/mcp`.
 
 HTTP startup refuses to proceed without all of the following:
 
@@ -87,11 +87,11 @@ The target is standard Streamable HTTP plus OAuth discovery, not an unrestricted
 | --- | --- |
 | Claude / Claude Code | Add a remote HTTP MCP server and authenticate; local stdio remains available |
 | Codex and other MCP IDE/CLI clients | Add the remote URL with OAuth, or use stdio locally |
-| ChatGPT | Add a custom MCP server/plugin where account and workspace permissions permit it; configure OAuth and scan the tools |
+| ChatGPT | Connected. Custom MCP server, owner OAuth login, tools available in chat |
 | Grok.com | Connectors → New Connector → Custom; enter the public URL and authenticate |
 | Other applications | Must actually implement custom MCP, Streamable HTTP and the configured OAuth flow |
 
-This does not mean every chatbot UI supports arbitrary MCP servers or that each product has been tested against this deployment. Current and legacy protocol paths are exercised locally, but end-to-end OAuth registration, consent and token refresh must be verified with each chosen client after hosting.
+ChatGPT is signed in through the provider and calls the live server. Claude, Codex, and Grok use the same `/mcp` URL and OAuth discovery. Each of those clients still needs its own sign-in. A client has to implement custom remote MCP, Streamable HTTP, and this OAuth flow.
 
 ## Sources checked 2026-10-28
 
