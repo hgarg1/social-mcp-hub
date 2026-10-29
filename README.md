@@ -1,46 +1,56 @@
 <p align="center">
-  <img src="docs/images/hero.jpg" alt="X Account MCP. One X account. ChatGPT is connected." width="100%">
+  <img src="docs/images/hero.jpg" alt="The hub's X integration, connected to ChatGPT." width="100%">
 </p>
 
 # Social MCP Hub
 
-A personal [MCP](https://modelcontextprotocol.io) hub for X and Instagram. ChatGPT is connected; X is live. Instagram is implemented for Creator/Business accounts, with live connection pending conversion of the owner's Personal account and Meta setup.
+A personal [MCP](https://modelcontextprotocol.io) hub for managing X and Instagram from compatible AI assistants. One Python service exposes 21 tools behind an owner-only OAuth login, with separate encrypted credentials for each platform.
 
 The public endpoint remains `https://x-account-mcp.onrender.com/mcp` so existing sign-in and chatbot connections keep working. The project is now [social-mcp-hub](https://github.com/hgarg1/social-mcp-hub); the main launch command is `social-mcp-hub`. Existing X tool names, imports and launch commands remain compatible.
 
-Seven `instagram_` tools add account lookup, media listing, photo/Reel container creation, status checks and explicit publishing. `instagram_capabilities` works without credentials; unconnected Instagram never blocks X. See [INSTAGRAM.md](INSTAGRAM.md) for setup and current limits. Each provider has its own encrypted token record, protected by the same owner-only WorkOS login.
+| Integration | Available operations | Deployment status |
+| --- | --- | --- |
+| X | Read/create/edit/delete posts, image uploads, native Article drafts and publishing | Live; connected through ChatGPT |
+| Instagram | Professional-account lookup, media listing, photo/Reel containers and explicit publishing | Implemented and mock-tested; live login awaits Creator/Business conversion and Meta setup |
+| X profile edits | Profile fields, avatar and banner tools | Legacy OAuth 1.0a only; unavailable in the deployed OAuth 2 setup |
 
-The agent can read the account, publish and edit posts, upload images, and draft or publish native long-form Articles. It never sees the X credentials. The X API never receives an action this server did not construct on purpose: a real edit, a checked delete, or an Article that was drafted before it was published.
+Instagram is optional: `instagram_capabilities` works without credentials, and an unconnected Instagram account does not block X. Personal Instagram accounts are unsupported. See [INSTAGRAM.md](INSTAGRAM.md) for setup and current limits.
+
+The assistant sends structured tool arguments; platform credentials stay on the server. X Articles and Instagram media containers have separate preparation and publishing calls so preparing content does not immediately make it public.
 
 Local clients use stdio. Remote clients use Streamable HTTP on an OAuth resource server that admits a single owner. Posts and Articles go through X API v2. Profile edits use the legacy v1.1 account endpoints. Authentication is OAuth. The server stores no passwords and does not scrape a browser session.
 
-## What ChatGPT actually calls
+## Architecture
 
 <p align="center">
   <img src="docs/images/flow.png" alt="ChatGPT authorizes with AuthKit, this server checks the token, then calls the X API. X credentials stay in one encrypted Postgres row." width="100%">
 </p>
 
-The public service is live. ChatGPT completes OAuth against the identity provider, then calls the MCP endpoint. This process is the resource server. Login, dynamic client registration, consent, and refresh tokens belong to the provider. A valid login as anyone else still fails here.
+ChatGPT or another MCP client signs in through WorkOS AuthKit, then sends its access token to the hub. The hub verifies the token and permits only the configured owner. WorkOS handles client login, registration and consent; X and Instagram independently authorize the hub to act on their accounts.
 
 ```mermaid
 flowchart LR
-  client[ChatGPT]
-  idp[Identity provider]
-  mcp[X Account MCP]
-  db[(Encrypted Postgres row)]
+  client[ChatGPT / Codex / MCP client]
+  idp[WorkOS AuthKit]
+  mcp[Social MCP Hub on Render]
+  db[(Neon Postgres: separate encrypted provider records)]
   x[X API]
+  ig[Instagram API: pending account connection]
 
   client -->|Authorization code + PKCE| idp
   idp -->|RS256 or ES256 access token| client
   client -->|Streamable HTTP /mcp| mcp
   idp -->|JWKS| mcp
   mcp -->|Official user-context API| x
-  mcp -->|Fernet token, row-locked refresh| db
+  mcp -->|Instagram Login token| ig
+  mcp <-->|Fernet encryption and row-locked refresh| db
 ```
 
 Every accepted token is RS256 or ES256 and must match the configured issuer, audience, expiry, owner `sub`, scope, and a `client_id` or `azp`. The JWKS URL comes from configuration, never from the token. `/health` returns `{"status":"ok"}` and nothing else. Anonymous calls to `/mcp` get a 401 and the protected-resource metadata.
 
 X OAuth 2 tokens are a different system from the chatbot login. They live in one Postgres row, encrypted with Fernet. When the access token is inside a minute of expiry, the worker locks that row, refreshes at X, and commits the rotated refresh token before any other worker can reuse the old one. The host can sleep. The login survives the restart. Losing the encryption key means signing in again. A crash between X's refresh and the commit can mean the same thing, and the server says so.
+
+Instagram has its own encrypted row and token lifecycle. Its long-lived access token renews on use when fewer than seven days remain, while still valid and at least 24 hours old. If it expires during a long period without use, reconnecting is necessary. Neither provider requires a paid Render disk or background refresh worker. Free hosting quotas and cold starts still apply; X API access has separate costs.
 
 The deployment recipe is [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -59,7 +69,7 @@ The deployment recipe is [DEPLOYMENT.md](DEPLOYMENT.md).
   </tr>
 </table>
 
-## The boundary
+## X tools
 
 | Tool | What it does |
 | --- | --- |
@@ -82,7 +92,29 @@ The deployment recipe is [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Writes that change or remove data are annotated for the host. `delete_post` is marked destructive. An edit that X reports as ineligible never becomes a delete followed by a new post. Article preview, draft, and publish are three tools because a draft is not public and the Article ID is not the post ID. The checked Articles API documents draft creation and publishing. This server does not invent an Article update or draft-delete endpoint. `get_post` reads Article data from the published post ID. Deleting an Article's seed post is not treated as guaranteed Article deletion.
 
-Account creation, account deletion, @handle changes, DMs, scheduling, threads, and video or GIF uploads are outside this server. Image tools take raw base64, up to this server's own 5 MiB decoded cap, so a tool argument cannot read an arbitrary local path or fetch an arbitrary URL. X does the real image validation.
+X account creation/deletion, @handle changes, DMs, scheduling, threads, and video or GIF uploads are outside this integration. X image tools take raw base64, up to this server's own 5 MiB decoded cap, so a tool argument cannot read an arbitrary local path or fetch an arbitrary URL. X does the real image validation.
+
+## Instagram tools
+
+| Tool | What it does |
+| --- | --- |
+| `instagram_capabilities` | Describe setup and supported operations without credentials or network calls |
+| `instagram_get_account` | Read and verify the connected Creator/Business account |
+| `instagram_list_media` | List your media; paginate with `cursors.after` |
+| `instagram_create_photo_container` | Prepare an unpublished photo using a public HTTPS JPEG URL |
+| `instagram_create_reel_container` | Prepare an unpublished Reel using a public HTTPS video URL |
+| `instagram_get_container_status` | Check whether processing is complete |
+| `instagram_publish_container` | Publish only after the container reports `FINISHED` |
+
+The publishing flow is **create container → check status → explicitly publish → verify media**. Meta fetches the supplied media URL; the hub does not download it. Generated-media hosting and resumable uploads are not implemented. Carousels, Stories, comments, DMs, profile edits, media editing/deletion and scheduling are also outside this version.
+
+After converting to Creator or Business, configure Instagram Login with `instagram_business_basic` and `instagram_business_content_publish`, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m social_mcp_hub.instagram_auth
+```
+
+The helper verifies OAuth state, exchanges the code for a long-lived token, checks the professional account and saves an encrypted login. Full instructions, callback registration, storage settings and live-verification limits are in [INSTAGRAM.md](INSTAGRAM.md).
 
 ## Install
 
@@ -101,25 +133,29 @@ Point a local host at the virtualenv. Merge this entry into an existing `mcpServ
 ```json
 {
   "mcpServers": {
-    "x-account": {
-      "command": "C:\\path\\to\\x-account-mcp\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "x_account_mcp.server"]
+    "social-mcp-hub": {
+      "command": "C:\\path\\to\\social-mcp-hub\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "social_mcp_hub.server"]
     }
   }
 }
 ```
 
-`mcp-client.example.json` is the same snippet. An editable install loads `.env` from the project directory, independent of the host's working directory. Environment variables win. Default stdio mode opens no port. Importing the server or listing tools does not contact X.
+`mcp-client.example.json` is the same snippet. An editable install loads `.env` from the project directory, independent of the host's working directory. Environment variables win. Default stdio mode opens no port. Importing the server or listing tools does not contact either platform.
 
 ```powershell
-.\.venv\Scripts\python.exe -m x_account_mcp.server
+.\.venv\Scripts\python.exe -m social_mcp_hub.server
 ```
 
 That process waits for JSON-RPC on stdin. Launch it from an MCP host for normal use.
 
+For the deployed service, connect a compatible remote MCP client to `https://x-account-mcp.onrender.com/mcp` and complete WorkOS sign-in. Local stdio configuration does not test the hosted OAuth flow. Refresh existing clients' tool metadata after this update, then call `instagram_capabilities` to check discovery without connecting Instagram or publishing anything. See [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and authentication settings.
+
 ## Connect the X account
 
-### OAuth 1.0a
+The live deployment uses OAuth 2 with durable encrypted storage. Legacy profile tools are optional and require a separate authentication method.
+
+### Optional legacy OAuth 1.0a
 
 The current v2 OpenAPI specification has no profile-edit endpoint. Profile tools call the legacy `/1.1/account/update_profile.json`, `update_profile_image.json`, `update_profile_banner.json`, and `remove_profile_banner.json` contracts documented by Tweepy. Access depends on what X still allows for your app. A rejection comes back as that error.
 
@@ -132,7 +168,7 @@ X_OAUTH1_ACCESS_TOKEN=your_user_access_token
 X_OAUTH1_ACCESS_TOKEN_SECRET=your_user_access_token_secret
 ```
 
-Those four values also authenticate v2 post and Article tools when `X_USER_ACCESS_TOKEN` is unset and there is no OAuth 2 token file. That is the smallest configuration that covers every implemented tool.
+Those four values can also authenticate v2 post and Article tools when no OAuth 2 database, explicit access token or saved login is configured. They do not enable Instagram or guarantee that X grants legacy endpoint access.
 
 When both schemes are configured, post and Article tools prefer an explicit OAuth 2 token or a saved login. Before a profile edit, the server checks that the OAuth 1.0a identity is the same account as the post credentials and refuses a cross-account write. A broken saved OAuth 2 login does not fall through to another identity.
 
@@ -141,17 +177,17 @@ When both schemes are configured, post and Article tools prefer an explicit OAut
 1. Create an app in the [X Developer Console](https://console.x.com/). Enable OAuth 2.0 with permission to read and write posts. API access, credits, and Article or edit eligibility have to exist on the account. The server reports X's rejection when they do not.
 2. Register the callback `http://127.0.0.1:8765/callback`, or set another registered URI in `X_REDIRECT_URI`.
 3. Put the OAuth client ID in `.env` as `X_CLIENT_ID`. For a confidential app, also set `X_CLIENT_SECRET`. These are not the OAuth 1 consumer key and secret.
-4. Run `.\.venv\Scripts\x-account-login.exe`.
+4. Run `.\.venv\Scripts\python.exe -m x_account_mcp.auth`.
 
 Open the authorization URL, approve the account, and paste the full redirected address into the terminal. The helper does not listen on localhost. A browser error on the callback is expected. Copy the address bar anyway. The helper checks the callback URI and the OAuth state before the PKCE code exchange.
 
-Requested scopes are `tweet.read tweet.write users.read media.write offline.access`. Login writes `.tokens.json`, which Git ignores. Access tokens refresh before expiration, including refresh-token rotation. Keep that file private. On Windows it inherits the parent directory's ACL. Run one server process per token file so refreshes do not race.
+Requested scopes are `tweet.read tweet.write users.read media.write offline.access`. With `X_TOKEN_DATABASE_URL` configured, login saves directly to the encrypted database. Otherwise, it writes `.tokens.json`, which Git ignores. Access tokens refresh before expiration, including refresh-token rotation. Keep local token files private and use one server process per file; the database mode serializes refreshes across processes.
 
-`X_USER_ACCESS_TOKEN` overrides the saved login and cannot refresh. An app-only bearer token cannot operate these account tools. Restart the MCP connection after changing `.env` or logging in.
+Database storage takes precedence over `X_USER_ACCESS_TOKEN` and local tokens. Without a database, `X_USER_ACCESS_TOKEN` overrides the saved file and cannot refresh. An app-only bearer token cannot operate these account tools. Restart the MCP connection after changing `.env` or logging in.
 
 Call `get_account`. You can pin the numeric ID with `X_EXPECTED_USER_ID` and restart. A token for a different account then fails before a write.
 
-Hosted OAuth 2 rotation uses the encrypted Neon Postgres store on the Free plan, so a Render restart does not require a paid disk. See [durable token storage](DEPLOYMENT.md#free-durable-oauth-2-token-storage).
+Hosted OAuth 2 rotation uses encrypted Neon Postgres storage on the Free plan, so a Render restart does not require a paid disk. See [durable provider credentials](DEPLOYMENT.md#durable-provider-credentials).
 
 ### Profile edits
 
@@ -200,7 +236,9 @@ Normal posts go to `/2/tweets`. The server does not substitute a thread or a lon
 
 The suite mocks every X request. It covers ownership, account pinning, the real edit payload, deletion, pagination, Article draft and publish as separate calls, PKCE and state, token rotation, error redaction, rate limits, and a single attempt after an ambiguous write. Profile tests cover OAuth 1 signing, identity matching, form encoding, field clearing, image validation, and an empty banner response. Article and post payloads are checked against `x-openapi.json`, the official contract saved on 2026-10-28. Integration tests launch the real stdio subprocess in current and legacy MCP modes. HTTP tests cover OAuth discovery, anonymous rejection, signed owner tokens, bad audiences, issuers, and scopes, expiry, and an authenticated tool call.
 
-Those tests do not post, delete, or spend API credits. The deployed server is the live path, and ChatGPT is a connected client of it.
+Instagram tests cover unpublished-container creation, readiness checks before publishing, account pinning, OAuth callback validation, encrypted storage, serialized token refresh, pagination without token-bearing URLs, sanitized errors and no blind write retries. Both the new hub entry point and the compatible X entry point are exercised over stdio. The current suite has 74 passing tests, with CI covering Python 3.11–3.13.
+
+Those tests do not post, delete, or spend API credits. X and ChatGPT are live-verified; Instagram remains mock-tested until account conversion, Meta setup and a successful live login/publication.
 
 ## References
 
@@ -212,3 +250,5 @@ Those tests do not post, delete, or spend API credits. The deployed server is th
 - [OAuth 2.0 authorization code with PKCE](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)
 - [Official MCP Python SDK](https://py.sdk.modelcontextprotocol.io/)
 - [Tweepy legacy profile endpoint contracts](https://docs.tweepy.org/en/stable/api.html#tweepy.API.update_profile)
+- [Meta's official Instagram Login API collection](https://www.postman.com/meta/instagram/folder/1z5vxzu/instagram-api-with-instagram-login)
+- [Instagram setup and verification limits](INSTAGRAM.md)
