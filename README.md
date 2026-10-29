@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/hero.jpg" alt="X Account MCP. One X account. ChatGPT is connected." width="100%">
+</p>
+
 # X Account MCP
 
 A production [MCP](https://modelcontextprotocol.io) server for one X account. ChatGPT is connected to it.
@@ -7,6 +11,15 @@ The agent can read the account, publish and edit posts, upload images, and draft
 Local clients use stdio. Remote clients use Streamable HTTP on an OAuth resource server that admits a single owner. Posts and Articles go through X API v2. Profile edits use the legacy v1.1 account endpoints. Authentication is OAuth. The server stores no passwords and does not scrape a browser session.
 
 ## What ChatGPT actually calls
+
+<p align="center">
+  <img src="docs/images/flow.png" alt="ChatGPT authorizes with AuthKit, this server checks the token, then calls the X API. X credentials stay in one encrypted Postgres row." width="100%">
+</p>
+
+The public service is live. ChatGPT completes OAuth against the identity provider, then calls the MCP endpoint. This process is the resource server. Login, dynamic client registration, consent, and refresh tokens belong to the provider. A valid login as anyone else still fails here.
+
+<details>
+<summary>The same path, as a diagram you can edit</summary>
 
 ```mermaid
 flowchart LR
@@ -24,13 +37,28 @@ flowchart LR
   mcp -->|Fernet token, row-locked refresh| db
 ```
 
-The public service is live. ChatGPT completes OAuth against the identity provider, then calls the MCP endpoint. This process is the resource server. Login, dynamic client registration, consent, and refresh tokens belong to the provider. A valid login as anyone else still fails here.
+</details>
 
 Every accepted token is RS256 or ES256 and must match the configured issuer, audience, expiry, owner `sub`, scope, and a `client_id` or `azp`. The JWKS URL comes from configuration, never from the token. `/health` returns `{"status":"ok"}` and nothing else. Anonymous calls to `/mcp` get a 401 and the protected-resource metadata.
 
 X OAuth 2 tokens are a different system from the chatbot login. They live in one Postgres row, encrypted with Fernet. When the access token is inside a minute of expiry, the worker locks that row, refreshes at X, and commits the rotated refresh token before any other worker can reuse the old one. The host can sleep. The login survives the restart. Losing the encryption key means signing in again. A crash between X's refresh and the commit can mean the same thing, and the server says so.
 
 The deployment recipe is [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Pictures the tools can carry
+
+`upload_image` takes a PNG or JPEG as raw base64. It checks the file signature and this server's 5 MiB cap, then hands the bytes to X. A tool argument cannot point at a local path or an arbitrary URL.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/hello-world.jpg" alt="Paper-cut robot waving beside a monitor that reads Hello world." width="100%"></td>
+    <td width="50%" align="center"><img src="docs/images/article.jpg" alt="Paper-cut robot lifting the top page from a stack of illustrated sheets." width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center">A post image. The monitor text is part of the picture. The tool sends the bytes.</td>
+    <td align="center">An Article is a draft first. A cover is an uploaded media id. Publish is a separate call and returns a different post id.</td>
+  </tr>
+</table>
 
 ## The boundary
 
