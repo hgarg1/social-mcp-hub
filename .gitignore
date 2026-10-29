@@ -7,6 +7,8 @@ keys.txt
 *.key
 .tokens.json
 .tokens.json.*
+.instagram.tokens.json
+.instagram.tokens.json.*
 __pycache__/
 .pytest_cache/
 *.egg-info/

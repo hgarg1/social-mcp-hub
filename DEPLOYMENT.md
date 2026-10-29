@@ -1,120 +1,57 @@
-# Public MCP deployment
+﻿# Deploy Social MCP Hub
 
-## Recommended setup
+## Current deployment
 
-Run one Python web service on **Render**, with **WorkOS AuthKit / Connect** as its OAuth authorization server. The MCP server handles your X account, while AuthKit handles chatbot client login, PKCE, client registration and refresh tokens. These are separate systems from X's own OAuth credentials.
+- Repository: https://github.com/hgarg1/social-mcp-hub
+- Public MCP endpoint: https://x-account-mcp.onrender.com/mcp
+- Render service ID: srv-dbhcdtom7kps73eh98l0, Free compute, Oregon
+- Production WorkOS issuer: https://everlasting-glade-44.authkit.app
+- Encrypted provider token storage: Neon Postgres Free
 
-The server is a personal integration: it accepts only the configured owner's identity. Publishing this source repository does not make your account public or turn it into a multi-user X SaaS.
+The public URL intentionally retains its original hostname. A display-name/repository rename does not require changing OAuth audiences, discovery or existing ChatGPT connections. If changing the URL later, update the WorkOS Resource Indicator, audience, server public URL and clients together.
 
-This repository is the source for a live deployment. The running service is on Render, AuthKit is the authorization server, and ChatGPT is connected to the public `/mcp` endpoint. Cloning the repository does not create that infrastructure or publish the X account.
+Existing unprefixed tools are X tools. Instagram tools use the instagram_ prefix. Existing x-account-mcp and x-account-login commands remain supported. New launches can use social-mcp-hub or python -m social_mcp_hub.server.
 
-Why Render:
+## Render commands
 
-- It runs ordinary Python web services and gives each service a public `onrender.com` hostname with managed HTTPS.
-- The process binds to `0.0.0.0` and Render's `PORT` environment variable.
-- Start with the smallest Free web compute plan for a trial. Free services sleep after 15 minutes of inactivity and can take about a minute to wake. For routine chatbot use, the smallest paid web compute plan avoids that Free sleep behavior; confirm the current price in the Dashboard before selecting it.
-- Store X credentials as service environment variables. With OAuth 1.0a credentials, this application needs no database or writable token storage. OAuth 2 uses the encrypted Neon Postgres store described below, so no paid Render disk is needed.
+Build: pip install -r requirements.lock.txt && pip install --no-deps .
 
-A normal Python service on Railway, Fly.io or a VPS is also structurally suitable, but Render is the deployment path documented here. Do not deploy the default stdio command as a web service.
+Preferred start: social-mcp-hub --transport http --host 0.0.0.0
 
-## Public endpoint and OAuth
+The currently configured x-account-mcp start command is a compatibility alias for the same hub. PORT is provided by Render. /health is public and returns only status, with no API calls. /mcp requires authentication. Discovery is at /.well-known/oauth-protected-resource/mcp.
 
-The live service uses a Render hostname of this shape. The hostname itself stays in the Render and AuthKit dashboards:
+## Shared owner authentication
 
-```text
-https://YOUR-SERVICE.onrender.com/mcp
-```
+Keep the existing X_MCP_* environment names for compatibility; they protect all hub tools, including Instagram:
 
-`/health` is public and returns only `{"status":"ok"}`. `/mcp` requires a signed bearer token. OAuth resource metadata is available at `/.well-known/oauth-protected-resource/mcp`.
-
-HTTP startup refuses to proceed without all of the following:
-
-| Environment variable | Value |
+| Variable | Purpose |
 | --- | --- |
-| `X_MCP_PUBLIC_URL` | Exact public HTTPS URL ending in `/mcp` |
-| `X_MCP_AUTH_ISSUER` | Exact `issuer` string from the OAuth provider's discovery metadata, preserving any trailing slash |
-| `X_MCP_AUTH_JWKS_URL` | Provider's trusted HTTPS JWKS endpoint |
-| `X_MCP_AUTH_AUDIENCE` | Expected API access-token audience; for AuthKit configure the public MCP URL as a Resource Indicator and use that same URL here |
-| `X_MCP_OWNER_SUBJECT` | Your stable user ID (`sub`) in the OAuth provider, not your X user ID or email address |
-| `X_MCP_AUTH_SCOPE` | Default `openid`; optionally use a provider-supported custom access scope |
-| `X_MCP_ALLOWED_ORIGINS` | Optional comma-separated exact origins for clients that send browser Origin headers; no wildcard is needed |
+| X_MCP_PUBLIC_URL | Exact HTTPS MCP URL ending /mcp |
+| X_MCP_AUTH_ISSUER | Exact production WorkOS issuer, preserving its slash behavior |
+| X_MCP_AUTH_JWKS_URL | Trusted provider signing-key endpoint |
+| X_MCP_AUTH_AUDIENCE | WorkOS Resource Indicator; the public MCP URL |
+| X_MCP_OWNER_SUBJECT | The single authorized WorkOS user ID |
+| X_MCP_AUTH_SCOPE | openid |
+| X_MCP_ALLOWED_ORIGINS | Optional exact origins, comma-separated |
 
-Tokens must use RS256 or ES256 and contain valid signature, issuer, audience, expiry, matching owner subject, required scope and a requesting `client_id` or `azp`. The audience and owner checks are enforced even if a different user successfully signs into the provider. A general sign-in alone never grants access to your X tools.
+Configure WorkOS Connect CIMD/DCR, Resource Indicator and refresh support for clients. The server validates signature, issuer, audience, expiry, scope, client identity and owner subject. Other users cannot access the tools simply by signing into WorkOS. Tokens and errors never log credentials.
 
-`openid` is deliberately used for AuthKit's dynamically registered clients, which receive its standard OIDC scopes. Owner and audience pinning provide the access restriction for this personal server. Do not assume that AuthKit DCR clients can request arbitrary custom permission scopes without additional provider configuration.
+## Durable provider credentials
 
-### Configure AuthKit / Connect
+X uses X_CLIENT_ID, X_CLIENT_SECRET, X_TOKEN_DATABASE_URL and X_TOKEN_ENCRYPTION_KEY. Keep X_EXPECTED_USER_ID to pin the X identity. Migrations/001_oauth_tokens.sql creates the encrypted X row table. Login through python -m x_account_mcp.auth saves directly to the database when configured. It serializes rotating refresh-token use with a Postgres row lock. No paid disk or background refresh worker is required.
 
-1. Create an AuthKit environment and enable a login method for your own user. Record your user ID as `X_MCP_OWNER_SUBJECT`.
-2. Under Connect configuration, enable **Client ID Metadata Document (CIMD)** and **Dynamic Client Registration (DCR)** to cover newer and older MCP clients.
-3. Register the exact public `/mcp` endpoint as a **Resource Indicator**. Set it as the default too if you want to accommodate clients that omit `resource`.
-4. Use the provider's exact metadata `issuer` as `X_MCP_AUTH_ISSUER`. AuthKit's Connect JWKS endpoint is `https://YOUR-AUTHKIT-DOMAIN/oauth2/jwks`; use that as `X_MCP_AUTH_JWKS_URL`.
-5. Set `X_MCP_AUTH_AUDIENCE` to the public `/mcp` Resource Indicator. Keep `X_MCP_AUTH_SCOPE=openid` for the standard dynamic-client flow.
-6. Enable/verify refresh-token support and `offline_access` in provider discovery if clients should stay connected. Restrict permitted client redirects according to the provider's MCP guidance.
+Instagram uses a separate table created by migrations/002_instagram_tokens.sql. That empty table has been prepared on this deployment. It reuses the database/encryption key by default; optional INSTAGRAM_TOKEN_DATABASE_URL and INSTAGRAM_TOKEN_ENCRYPTION_KEY override them. See INSTAGRAM.md for conversion, Meta setup, login, tools and limitations. Instagram is currently unconnected; this does not prevent X from working.
 
-The code implements the resource-server side, not its own login page or token issuer. An existing provider is necessary; filling random strings into these fields does not create OAuth.
+X_VERIFY_ACCOUNT_ON_START=true performs one authenticated X account lookup per process startup. It avoids a database/API call on every health probe.
 
-## Create the Render web service
+Never overwrite or regenerate the encryption key during redeployment. Missing keys, revoked credentials, expired Instagram tokens or a crash between a remote refresh and database commit can require reconnecting.
 
-1. In Render choose **New → Web Service**, connect your GitHub repo, and select branch `main` and the Python runtime. Use Python 3.12, the locally tested version, if selecting a runtime version.
-2. Build command:
+## Deployment checks
 
-   ```sh
-   pip install -r requirements.lock.txt && pip install --no-deps .
-   ```
+1. Push to main and monitor the specific automatic deployment until live.
+2. Verify /health returns 200, anonymous /mcp returns 401, and discovery advertises the production issuer.
+3. Confirm startup logs verify the configured X account.
+4. Refresh tool metadata in ChatGPT and start a new conversation. Existing sign-in remains valid subject to provider expiry/revocation.
+5. Call preview_article and instagram_capabilities without publishing. Test real Instagram account lookup/publication only after account conversion and credentials are configured.
 
-3. Start command:
-
-   ```sh
-   x-account-mcp --transport http --host 0.0.0.0
-   ```
-
-   The CLI reads the port from Render's `PORT`. Use `/health` for the health-check path.
-
-4. Choose the smallest Free compute plan for testing, or the smallest paid plan for regular availability after reviewing its price. Do not add a database for the OAuth 1.0a environment-variable setup.
-5. In the service's Environment section, set the HTTP/OAuth values above and your four X OAuth 1.0a values: `X_CONSUMER_KEY`, `X_CONSUMER_SECRET`, `X_OAUTH1_ACCESS_TOKEN`, `X_OAUTH1_ACCESS_TOKEN_SECRET`. Optionally pin `X_EXPECTED_USER_ID`. These secrets belong in the Render Dashboard, never in GitHub or build arguments.
-6. Use the actual Render-assigned hostname for `X_MCP_PUBLIC_URL` and in the AuthKit Resource Indicator. If the first startup happened before these values were known, finish configuring them and redeploy. The fail-closed startup is expected until configuration is complete.
-7. Verify `/health` succeeds, an anonymous request to `/mcp` gets HTTP 401, discovery advertises the correct issuer, and the owner can authenticate and call `preview_article`.
-8. Call `get_account` and confirm the X identity before making a write. Actual X API access, credits, Article eligibility and legacy profile access remain account-dependent and must be checked live.
-
-If using the public Git repository connection rather than Render's Git-provider integration, Render does not enable auto-deploys for that source type. Connect GitHub directly if you want automatic deployments on pushes.
-
-## Chatbot and harness compatibility
-
-The target is standard Streamable HTTP plus OAuth discovery, not an unrestricted URL that anyone can call. Use the same `/mcp` endpoint in each client and complete the owner's provider sign-in. Each client can create its own OAuth client registration.
-
-| Client | Connection path |
-| --- | --- |
-| Claude / Claude Code | Add a remote HTTP MCP server and authenticate; local stdio remains available |
-| Codex and other MCP IDE/CLI clients | Add the remote URL with OAuth, or use stdio locally |
-| ChatGPT | Connected. Custom MCP server, owner OAuth login, tools available in chat |
-| Grok.com | Connectors → New Connector → Custom; enter the public URL and authenticate |
-| Other applications | Must actually implement custom MCP, Streamable HTTP and the configured OAuth flow |
-
-ChatGPT is signed in through the provider and calls the live server. Claude, Codex, and Grok use the same `/mcp` URL and OAuth discovery. Each of those clients still needs its own sign-in. A client has to implement custom remote MCP, Streamable HTTP, and this OAuth flow.
-
-## Sources checked 2026-10-28
-
-- [Render web services, URLs and port binding](https://render.com/docs/web-services)
-- [Render Free sleep and filesystem limits](https://render.com/docs/free)
-- [Current Render compute plans](https://render.com/docs/compute-plans)
-- [Render environment variables and secrets](https://render.com/docs/configure-environment-variables)
-- [WorkOS AuthKit MCP authorization and Resource Indicators](https://workos.com/docs/authkit/mcp)
-- [WorkOS Connect token claims and scope limitations](https://workos.com/docs/authkit/connect/token-claims)
-- [MCP SDK HTTP resource-server authorization](https://py.sdk.modelcontextprotocol.io/run/authorization/)
-- [Claude Code MCP](https://code.claude.com/docs/en/mcp)
-- [Official OpenAI MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
-- [Grok custom connectors](https://docs.x.ai/grok/connectors)
-
-
-## Free durable OAuth 2 token storage
-
-Render Free plus Neon Free supports the OAuth 2 post, Article and image workflows without legacy OAuth 1.0a. The dedicated database has one encrypted token row. Configure `X_TOKEN_DATABASE_URL`, `X_TOKEN_ENCRYPTION_KEY`, `X_CLIENT_ID` and `X_CLIENT_SECRET` in Render. Database mode takes precedence over a static access token or local token file. Keep the encryption key unchanged across redeploys; losing it requires reauthorization.
-
-Apply `migrations/001_oauth_tokens.sql` once to a fresh database using an administrative connection. Seed the encrypted row from an authorized login using `seed_tokens`; the seed refuses to overwrite an existing row by default. Subsequent interactive logins save directly to the configured database. No token is committed to Git.
-
-Each lookup opens a short database transaction. An expired access token is refreshed while holding a Postgres row lock; the replacement refresh/access tokens are encrypted and committed before the access token is returned. Concurrent workers wait and reuse the saved replacement. No cron or always-running process is required: refresh occurs on the next request after expiry. Revocation, provider expiry of a refresh token, or a crash between an external refresh and database commit can still require signing in again.
-
-`X_VERIFY_ACCOUNT_ON_START=true` performs one authenticated X account read per HTTP process startup, allowing deployment logs to verify the hosted credentials. It does not query the database on every health probe.
-
-The Neon organization used for this deployment is on its Free plan. Free allowances and Render sleep limits still apply; this does not make the X API itself free. See [Neon pricing](https://neon.com/pricing) for current free limits. Legacy-only profile tools remain unavailable under OAuth 2.
+Render Free can sleep and cold starts can delay client initialization. Neon/Render free quotas still apply. X API access has separate costs. Instagram live permissions and eligibility remain to be verified in Meta's dashboard.

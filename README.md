@@ -2,9 +2,13 @@
   <img src="docs/images/hero.jpg" alt="X Account MCP. One X account. ChatGPT is connected." width="100%">
 </p>
 
-# X Account MCP
+# Social MCP Hub
 
-A production [MCP](https://modelcontextprotocol.io) server for one X account. ChatGPT is connected to it.
+A personal [MCP](https://modelcontextprotocol.io) hub for X and Instagram. ChatGPT is connected; X is live. Instagram is implemented for Creator/Business accounts, with live connection pending conversion of the owner's Personal account and Meta setup.
+
+The public endpoint remains `https://x-account-mcp.onrender.com/mcp` so existing sign-in and chatbot connections keep working. The project is now [social-mcp-hub](https://github.com/hgarg1/social-mcp-hub); the main launch command is `social-mcp-hub`. Existing X tool names, imports and launch commands remain compatible.
+
+Seven `instagram_` tools add account lookup, media listing, photo/Reel container creation, status checks and explicit publishing. `instagram_capabilities` works without credentials; unconnected Instagram never blocks X. See [INSTAGRAM.md](INSTAGRAM.md) for setup and current limits. Each provider has its own encrypted token record, protected by the same owner-only WorkOS login.
 
 The agent can read the account, publish and edit posts, upload images, and draft or publish native long-form Articles. It never sees the X credentials. The X API never receives an action this server did not construct on purpose: a real edit, a checked delete, or an Article that was drafted before it was published.
 
