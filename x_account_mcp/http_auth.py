@@ -8,7 +8,6 @@ import jwt
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import AnyHttpUrl
 
 
 @dataclass(frozen=True)
@@ -44,8 +43,8 @@ class HttpSettings:
         return cls(**values, scope=os.environ.get("X_MCP_AUTH_SCOPE", "openid"), additional_origins=origins)
 
     def auth_settings(self) -> AuthSettings:
-        return AuthSettings(issuer_url=AnyHttpUrl(self.issuer),
-                            resource_server_url=AnyHttpUrl(self.public_url), required_scopes=[self.scope],
+        return AuthSettings(issuer_url=self.issuer,
+                            resource_server_url=self.public_url, required_scopes=[self.scope],
                             # The verifier checks the exact configured JWT audience.
                             validate_token_resource=False)
 

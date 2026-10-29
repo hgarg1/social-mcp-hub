@@ -17,7 +17,7 @@ def anyio_backend():
 
 @pytest.fixture
 def config():
-    return HttpSettings(public_url="https://mcp.example.com/mcp", issuer="https://identity.example.com/",
+    return HttpSettings(public_url="https://mcp.example.com/mcp", issuer="https://identity.example.com",
                         jwks_url="https://identity.example.com/jwks", audience="x-account-api", owner_subject="owner-42")
 
 
