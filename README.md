@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/hero.jpg" alt="The hub's X integration, connected to ChatGPT." width="100%">
+  <img src="docs/images/social-hub-hero.png" alt="Social MCP Hub: a robot connects X and Instagram through a private, locked hub." width="100%">
 </p>
 
 # Social MCP Hub
@@ -21,10 +21,6 @@ The assistant sends structured tool arguments; platform credentials stay on the 
 Local clients use stdio. Remote clients use Streamable HTTP on an OAuth resource server that admits a single owner. Posts and Articles go through X API v2. Profile edits use the legacy v1.1 account endpoints. Authentication is OAuth. The server stores no passwords and does not scrape a browser session.
 
 ## Architecture
-
-<p align="center">
-  <img src="docs/images/flow.png" alt="ChatGPT authorizes with AuthKit, this server checks the token, then calls the X API. X credentials stay in one encrypted Postgres row." width="100%">
-</p>
 
 ChatGPT or another MCP client signs in through WorkOS AuthKit, then sends its access token to the hub. The hub verifies the token and permits only the configured owner. WorkOS handles client login, registration and consent; X and Instagram independently authorize the hub to act on their accounts.
 
@@ -54,18 +50,18 @@ Instagram has its own encrypted row and token lifecycle. Its long-lived access t
 
 The deployment recipe is [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Pictures the tools can carry
+## Two platforms, one hub
 
-`upload_image` takes a PNG or JPEG as raw base64. It checks the file signature and this server's 5 MiB cap, then hands the bytes to X. A tool argument cannot point at a local path or an arbitrary URL.
+X uploads use PNG/JPEG bytes as base64; Instagram containers use public HTTPS media URLs fetched by Meta. Both integrations keep preparation separate from publishing. The illustrations below show the two workflows; Instagram's live connection is still pending.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/images/hello-world.jpg" alt="Paper-cut robot waving beside a monitor that reads Hello world." width="100%"></td>
-    <td width="50%" align="center"><img src="docs/images/article.jpg" alt="Paper-cut robot lifting the top page from a stack of illustrated sheets." width="100%"></td>
+    <td width="50%" align="center"><img src="docs/images/x-tools.png" alt="Posts and Articles: a paper-cut robot prepares an X post and a stack of Article pages." width="100%"></td>
+    <td width="50%" align="center"><img src="docs/images/instagram-tools.png" alt="Photos and Reels: a paper-cut robot prepares a photo print and vertical video for Instagram." width="100%"></td>
   </tr>
   <tr>
-    <td align="center">A post image. The monitor text is part of the picture. The tool sends the bytes.</td>
-    <td align="center">An Article is a draft first. A cover is an uploaded media id. Publish is a separate call and returns a different post id.</td>
+    <td align="center"><strong>X · Posts + Articles</strong><br>Live integration. Upload images, manage posts, and draft then publish native Articles.</td>
+    <td align="center"><strong>Instagram · Photos + Reels</strong><br>Prepare a container, check processing, then publish. Creator/Business account setup required.</td>
   </tr>
 </table>
 
