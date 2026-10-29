@@ -18,9 +18,6 @@ Local clients use stdio. Remote clients use Streamable HTTP on an OAuth resource
 
 The public service is live. ChatGPT completes OAuth against the identity provider, then calls the MCP endpoint. This process is the resource server. Login, dynamic client registration, consent, and refresh tokens belong to the provider. A valid login as anyone else still fails here.
 
-<details>
-<summary>The same path, as a diagram you can edit</summary>
-
 ```mermaid
 flowchart LR
   client[ChatGPT]
@@ -36,8 +33,6 @@ flowchart LR
   mcp -->|Official user-context API| x
   mcp -->|Fernet token, row-locked refresh| db
 ```
-
-</details>
 
 Every accepted token is RS256 or ES256 and must match the configured issuer, audience, expiry, owner `sub`, scope, and a `client_id` or `azp`. The JWKS URL comes from configuration, never from the token. `/health` returns `{"status":"ok"}` and nothing else. Anonymous calls to `/mcp` get a 401 and the protected-resource metadata.
 
