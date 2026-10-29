@@ -16,7 +16,7 @@ from .config import Settings
 from .errors import XError
 
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
-SCOPES = "tweet.read tweet.write users.read offline.access"
+SCOPES = "tweet.read tweet.write users.read media.write offline.access"
 
 
 def read_tokens(path: Path) -> dict:

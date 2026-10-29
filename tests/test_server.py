@@ -251,7 +251,7 @@ async def test_mcp_schemas_validation_preview_and_errors(tmp_path):
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         assert set(tools) == {"get_account", "get_post", "list_my_posts", "create_post", "update_post",
                               "delete_post", "preview_article", "create_article_draft", "publish_article",
-                              "update_profile", "update_profile_image", "update_profile_banner", "remove_profile_banner"}
+                              "update_profile", "update_profile_image", "update_profile_banner", "remove_profile_banner", "upload_image"}
         assert tools["delete_post"].annotations.destructive_hint is True
         assert tools["preview_article"].annotations.read_only_hint is True
         preview = await client.call_tool("preview_article", {"title": "Title", "body": "**Hello**"})
@@ -272,7 +272,7 @@ async def test_actual_stdio_server(mode, tmp_path):
         args=["-m", "x_account_mcp.server"], cwd=str(ROOT),
         env={"X_USER_ACCESS_TOKEN": "", "X_TOKEN_FILE": str(tmp_path / "missing.json")})
     async with Client(params, mode=mode) as client:
-        assert len((await client.list_tools()).tools) == 13
+        assert len((await client.list_tools()).tools) == 14
         result = await client.call_tool("preview_article", {"title": "Stdio test", "body": "Hello"})
         assert not result.is_error
         assert result.structured_content["published"] is False

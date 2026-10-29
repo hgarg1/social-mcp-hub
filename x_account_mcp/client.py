@@ -95,6 +95,22 @@ class XClient:
             raise XError("Authenticated account does not match X_EXPECTED_USER_ID.")
         return result
 
+    async def upload_image(self, image_base64: str) -> dict:
+        if len(image_base64) > 7_000_000:
+            raise XError("Image exceeds the 5 MiB decoded-image limit.")
+        try:
+            raw = base64.b64decode(image_base64, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise XError("Supply raw base64 image data without a data: prefix.") from exc
+        if len(raw) > 5 * 1024 * 1024:
+            raise XError("Image exceeds the 5 MiB decoded-image limit.")
+        if not raw.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff")):
+            raise XError("This tool accepts PNG or JPEG images only.")
+        await self.account()
+        return await self.request("POST", "media/upload", payload={
+            "media": image_base64, "media_category": "tweet_image",
+        })
+
     async def get_post(self, post_id: str) -> dict:
         return await self.request("GET", "tweets/" + require_id(post_id), params={"tweet.fields": POST_FIELDS})
 

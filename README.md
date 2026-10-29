@@ -11,6 +11,7 @@ For a public HTTPS endpoint and chatbot compatibility, see [DEPLOYMENT.md](DEPLO
 | `get_account` | Read the authenticated profile, username, ID and public metrics |
 | `get_post` | Read a post, including edit metadata and Article fields when X returns them |
 | `list_my_posts` | Read a page of your posts; accepts the previous response's `meta.next_token` |
+| `upload_image` | Upload a PNG/JPEG image as base64; returns a media ID for posts/replies (requires `media.write`) |
 | `create_post` | Publish text, reply, quote, or attach already-uploaded media IDs |
 | `update_post` | Edit your own eligible post with `edit_options.previous_post_id`; returns the new post ID |
 | `delete_post` | Permanently delete your own post |
@@ -24,7 +25,7 @@ For a public HTTPS endpoint and chatbot compatibility, see [DEPLOYMENT.md](DEPLO
 
 `x-account://capabilities` describes these operations as an MCP resource.
 
-“CRUD” here means managing posts on an existing account, plus supported profile edits. Account creation/deletion, @handle changes, DMs, scheduling, threads and post-media uploading are outside this version. The checked official Articles API provides draft creation and publishing; this server does not invent Article update or draft-deletion endpoints. `get_post` can request Article data using the published post ID, not the Article ID. Deleting an Article's seed post is not presented as guaranteed Article deletion.
+“CRUD” here means managing posts on an existing account, plus supported profile edits. Account creation/deletion, @handle changes, DMs, scheduling, threads and video/GIF uploading are outside this version. The checked official Articles API provides draft creation and publishing; this server does not invent Article update or draft-deletion endpoints. `get_post` can request Article data using the published post ID, not the Article ID. Deleting an Article's seed post is not presented as guaranteed Article deletion.
 
 ## Installation
 
@@ -70,7 +71,7 @@ If you configure both authentication schemes, post/Article tools prefer the expl
 
 Open the displayed authorization URL, approve the account, and paste the full redirected address into the terminal. This manual callback flow does not run a localhost web server: a browser connection error at the callback is expected; copy the address bar anyway. The helper verifies both the callback URI and OAuth state before exchanging the code with PKCE.
 
-The requested scopes are `tweet.read tweet.write users.read offline.access`. Login saves `.tokens.json`, excluded from Git. Access tokens refresh automatically before expiration, including refresh-token rotation. Keep the token file private; on Windows it inherits the parent directory's ACL. Use one MCP server process per token file to avoid competing refreshes.
+The requested scopes are `tweet.read tweet.write users.read media.write offline.access`. Login saves `.tokens.json`, excluded from Git. Access tokens refresh automatically before expiration, including refresh-token rotation. Keep the token file private; on Windows it inherits the parent directory's ACL. Use one MCP server process per token file to avoid competing refreshes.
 
 Alternatively set `X_USER_ACCESS_TOKEN` to an existing OAuth 2.0 **user** access token. It overrides the saved login and cannot refresh automatically. An app-only bearer token does not work for these account tools. Restart the MCP connection after changing `.env` or logging in.
 
@@ -133,7 +134,7 @@ First call `preview_article` or `create_article_draft` with:
 
 `preview_article` returns the exact draft request without contacting X. `create_article_draft` calls `/2/articles/draft` and returns an Article ID. To make it public, call `publish_article` with that `article_id`. Publishing returns a different ID: the public post ID.
 
-Markdown is encoded using X's documented `markdown` entity inside an atomic DraftJS block, with snake_case range fields. Use `body_format: "text"` for ordinary paragraph blocks instead. X enforces Article length, Markdown limits, media eligibility and account access. An optional `cover_media_id` must refer to an already uploaded image owned by the account. This server does not upload local files.
+Markdown is encoded using X's documented `markdown` entity inside an atomic DraftJS block, with snake_case range fields. Use `body_format: "text"` for ordinary paragraph blocks instead. X enforces Article length, Markdown limits, media eligibility and account access. An optional `cover_media_id` must refer to an already uploaded image owned by the account. Use `upload_image` with base64 image bytes to obtain a media ID; tools do not read arbitrary local paths.
 
 Normal post creation uses `/2/tweets`; it never substitutes a thread or long tweet for an Article. Normal post edits use X's actual edit API, and never delete-and-repost. X decides edit-window and account eligibility. Edits can return a new post ID; use that ID for subsequent operations.
 

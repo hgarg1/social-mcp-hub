@@ -68,6 +68,11 @@ def build_server(api: XClient | None = None, *, http_settings: HttpSettings | No
         """Edit your normal post via X edit_options. Eligibility/edit-window rules apply; X returns a new post ID. Never deletes the original."""
         return await api.update_post(post_id, text)
 
+    @server.tool(annotations=write)
+    async def upload_image(image_base64: Annotated[str, Field(min_length=1, max_length=7_000_000)]) -> dict[str, Any]:
+        """Upload PNG/JPEG image bytes as raw base64 (up to 5 MiB). Requires media.write. Pass returned data.id to create_post.media_ids before expiry. No local paths or URLs accepted."""
+        return await api.upload_image(image_base64)
+
     @server.tool(annotations=delete)
     async def delete_post(post_id: XId) -> dict[str, Any]:
         """Permanently delete a post belonging to your authenticated account. Deleted posts cannot be recovered."""
@@ -123,7 +128,7 @@ def build_server(api: XClient | None = None, *, http_settings: HttpSettings | No
                 "profile": ["update_fields", "update_avatar", "update_banner", "remove_banner"],
                 "profile_auth": "OAuth 1.0a; legacy endpoint access required and not yet verified live",
                 "limits": ["Article editing/deleting drafts has no documented endpoint in the checked API.",
-                           "Account creation/deletion, @handle changes, post media uploads and DMs are not implemented.",
+                           "Account creation/deletion, @handle changes, video/GIF uploads and DMs are not implemented.",
                            "Normal post edits depend on X account and post eligibility."]}
 
     return server
